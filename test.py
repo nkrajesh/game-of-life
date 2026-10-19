@@ -517,5 +517,72 @@ def main():
     print(f"Collection errors: {len(ERRORS)}")
 
 
+
+def flatten_parameters(value, prefix=""):
+    """Convert nested rule parameters into individual CSV-friendly settings."""
+    rows = []
+
+    if isinstance(value, dict):
+        if not value:
+            rows.append((prefix, {}))
+        else:
+            for key, child in value.items():
+                name = f"{prefix}.{key}" if prefix else key
+                rows.extend(flatten_parameters(child, name))
+
+    elif isinstance(value, list):
+        # Keep lists such as status-check contexts and reviewer collections
+        # together as JSON, preserving their structure.
+        rows.append((prefix, value))
+
+    else:
+        rows.append((prefix, value))
+
+    return rows
+
+
+# Inside fetch_rulesets(), after fetching `detail`:
+for rule_index, rule in enumerate(detail.get("rules", []), start=1):
+    rule_type = rule.get("type", f"unknown_rule_{rule_index}")
+    parameters = rule.get("parameters", {})
+
+    # Record the rule itself, including rules that have no parameters.
+    add_row(
+        repo,
+        "ruleset",
+        detail.get("id", ""),
+        detail.get("name", ""),
+        "rule",
+        f"{rule_type}.type",
+        rule_type,
+        enforcement=detail.get("enforcement", ""),
+        target_type=detail.get("target", ""),
+        target_include=detail.get("conditions", {})
+            .get("ref_name", {}).get("include", []),
+        target_exclude=detail.get("conditions", {})
+            .get("ref_name", {}).get("exclude", []),
+        bypass=detail.get("bypass_actors", []),
+        source=f"/repos/{ORG}/{repo}/rulesets/{detail.get('id')}",
+    )
+
+    for parameter, value in flatten_parameters(parameters):
+        add_row(
+            repo,
+            "ruleset",
+            detail.get("id", ""),
+            detail.get("name", ""),
+            "rule_parameter",
+            f"{rule_type}.{parameter}",
+            value,
+            enforcement=detail.get("enforcement", ""),
+            target_type=detail.get("target", ""),
+            target_include=detail.get("conditions", {})
+                .get("ref_name", {}).get("include", []),
+            target_exclude=detail.get("conditions", {})
+                .get("ref_name", {}).get("exclude", []),
+            bypass=detail.get("bypass_actors", []),
+            source=f"/repos/{ORG}/{repo}/rulesets/{detail.get('id')}",
+        )
+
 if __name__ == "__main__":
     main()
